@@ -18,26 +18,58 @@ class RAGEngine:
         self.chunks = []
         self.index = None
         self.chunk_size = 300
-        self.chunk_overlap = 100
+        self.chunk_overlap = 50
 
     def split_text(self, text: str) -> List[str]:
-        # Simple character splitting for demonstration
-        # In production, use langchain RecursiveCharacterTextSplitter
+        # Better splitting strategy: Respect lines (paragraphs)
         chunks = []
-        text_len = len(text)
-        start = 0
-        while start < text_len:
-            end = min(start + self.chunk_size, text_len)
-            chunks.append(text[start:end])
-            start += self.chunk_size - self.chunk_overlap
+        lines = text.split('\n')
+        current_chunk = []
+        current_length = 0
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            line_len = len(line)
+            
+            # If adding this line exceeds chunk size, save current chunk and start new
+            if current_length + line_len > self.chunk_size:
+                if current_chunk:
+                    chunks.append(" ".join(current_chunk))
+                    
+                    # Handle overlap by keeping the last 2 lines
+                    overlap_k = 2
+                    if len(current_chunk) > overlap_k:
+                        current_chunk = current_chunk[-overlap_k:]
+                    
+                    current_length = sum(len(l) for l in current_chunk)
+                    
+            current_chunk.append(line)
+            current_length += line_len
+            
+        if current_chunk:
+            chunks.append(" ".join(current_chunk))
+            
+        # Fallback to character split if chunks are too huge or empty (unlikely with this logic but good safety)
+        if not chunks and text:
+             return [text[i:i+self.chunk_size] for i in range(0, len(text), self.chunk_size)]
+             
         return chunks
 
     def clear(self):
+        print("DEBUG: Clearing RAG Engine History")
         self.chunks = []
         self.index = None
+        # Reset is important to avoid stale data
+        if embedding_model:
+             # Just to be safe, no special action needed for model
+             pass
 
     def add_document(self, text: str):
         new_chunks = self.split_text(text)
+        print(f"DEBUG: Created {len(new_chunks)} chunks from document.")
         if not new_chunks:
             return
             

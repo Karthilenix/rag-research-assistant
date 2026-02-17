@@ -23,7 +23,7 @@ app.add_middleware(
 
 class QueryRequest(BaseModel):
     query: str
-    k: int = 10
+    k: int = 5
 
 class QueryResponse(BaseModel):
     answer: str
@@ -47,14 +47,34 @@ async def upload_pdf(file: UploadFile = File(...)):
 @app.post("/query", response_model=QueryResponse)
 async def query_document(request: QueryRequest):
     try:
-        context_chunks = rag_engine.retrieve(request.query, k=request.k)
+        
+        # Calculate total text length
+        total_text_len = sum(len(c) for c in rag_engine.chunks)
+        print(f"DEBUG: Total document length: {total_text_len} chars")
+
+        # If document is roughly under 15-20 pages (~50k chars), pass FULL CONTEXT.
+        # This is the "God Mode" for Resumes and Research Papers.
+        # RAG is only needed for massive books/docs > 50k chars.
+        if total_text_len < 50000:
+            print("DEBUG: Document fits in context window. Passing FULL CONTEXT to LLM.")
+            context_chunks = rag_engine.chunks
+        else:
+            print("DEBUG: Document too large. Using Vector Retrieval (RAG).")
+            # Increase k to 10 for better coverage in large docs
+            context_chunks = rag_engine.retrieve(request.query, k=10)
         
         if not context_chunks:
             return QueryResponse(answer="I don't have enough context to answer that based on the uploaded documents.", context=[])
         
         context_str = "\n\n".join(context_chunks)
-        print(f"DEBUG: LLM Context Length: {len(context_str)} chars")
-        print(f"DEBUG: First 200 chars of context: {context_str[:200]}...")
+        print(f"DEBUG: LLM Context Length sent: {len(context_str)} chars")
+        
+        # Log context to file for inspection
+        with open("retrieval_debug.log", "w", encoding="utf-8") as f:
+            f.write(f"Query: {request.query}\n")
+            f.write("-" * 50 + "\n")
+            f.write(context_str)
+            
         answer = llm_service.generate_response(context_str, request.query)
         
         return QueryResponse(answer=answer, context=context_chunks)

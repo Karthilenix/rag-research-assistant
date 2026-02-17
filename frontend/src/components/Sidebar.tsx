@@ -10,7 +10,14 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ onUploadSuccess, onClear }) => {
     const [uploading, setUploading] = useState(false);
-    const [fileList, setFileList] = useState<string[]>([]);
+    const [fileList, setFileList] = useState<string[]>(() => {
+        const saved = localStorage.getItem('uploadedFiles');
+        return saved ? JSON.parse(saved) : [];
+    });
+
+    React.useEffect(() => {
+        localStorage.setItem('uploadedFiles', JSON.stringify(fileList));
+    }, [fileList]);
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -47,6 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onUploadSuccess, onClear }) =>
         try {
             await axios.delete('http://localhost:8000/clear');
             setFileList([]);
+            localStorage.removeItem('uploadedFiles');
             onClear();
         } catch (error) {
             console.error('Clear failed', error);

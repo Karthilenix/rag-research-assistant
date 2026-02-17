@@ -10,14 +10,22 @@ import { v4 as uuidv4 } from 'uuid';
 const API_Base_URL = 'http://localhost:8000';
 
 function App() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const saved = localStorage.getItem('chatHistory');
+    return saved ? JSON.parse(saved, (key, value) => {
+      if (key === 'timestamp') return new Date(value);
+      return value;
+    }) : [{
       id: 'welcome',
       role: 'assistant',
       content: 'Hello! I am your Research AI Assistant. Upload a PDF document using the sidebar to get started, or ask me questions about already uploaded documents.',
       timestamp: new Date(),
-    }
-  ]);
+    }];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('chatHistory', JSON.stringify(messages));
+  }, [messages]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -101,6 +109,7 @@ function App() {
               timestamp: new Date(),
             }
           ]);
+          localStorage.removeItem('chatHistory');
         }}
       />
 
